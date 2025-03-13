@@ -1,0 +1,35 @@
+defaults:
+  - /entrypoints/InferenceEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /samplers/AutoRegressiveSamplerCfg@sampler_cfg
+  - /envs/PushTEnvCfg@env_cfg
+  - _self_
+
+wandb_cfg:
+  name:  ${sampler_cfg.temperature}temp_${sampler_cfg.sample_fn}_${model_afid} 
+  group: pusht_inference_layover
+  project: qfat
+  id: 
+  notes: 
+  mode: online 
+device: mps
+training_run_id: 
+model_afid: 
+sampler_cfg:
+  temperature: 1
+  horizon: 4
+  sample_fn: gmm 
+env_cfg:
+  _target_: qfat.environments.pusht.env.NormalizedPushTWrapper
+  reset_to_state: [298.42640687119285, 213.57359312880715, 213.57359312880715, 298.42640687119285, 0.7853981633974483]
+  use_success_thresh: true
+render_mode: # human
+num_episodes: 400 # if none, while loop till interrupted
+max_steps_per_episode: 40
+seed: 42 
+callbacks:
+  step_end:
+    - _target_:  qfat.callbacks.inference_callbacks.PushTOverlayImage
+  episode_end:
+    - _target_: qfat.callbacks.inference_callbacks.RewardLogger
+      reward_reduction: last

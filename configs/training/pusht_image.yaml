@@ -1,0 +1,87 @@
+defaults:
+  - /entrypoints/TrainingEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /datasets/SlicedTrajectoryDatasetCfg@slicer_cfg
+  - /models/QFATCfg@model_cfg
+  - /optimizers/OptimizerCfg@model_cfg.optimizer_cfg
+  - /models/DecoderBlockCfg@model_cfg.decoder_block_cfg
+  - /models/HeirarchicalResNetEncoderCfg@model_cfg.encoder_cfg
+  - /models/MultiheadAttentionCfg@model_cfg.decoder_block_cfg.mha_cfg
+  - /datasets/PushTTrajectoryDatasetCfg@training_dataset_cfg
+  - /dataloaders/DataLoaderCfg@train_dataloader_cfg
+  - _self_
+wandb_cfg:
+  name: ${model_cfg.mixture_size}mix_${slicer_cfg.action_horizon}action_horizon
+  group: pusht_image 
+  project: qfat
+  id:   # set id here to resume training from a checkpoint 
+  notes:
+  mode: online
+training_dataset_cfg:
+  stats_path: data/pusht/data_stats_img.json
+  mode: "image"
+train_dataloader_cfg:
+  shuffle: true
+  batch_size: 256 
+  num_workers: 0
+  persistent_workers: false
+val_dataloader_cfg:
+  shuffle: true
+  batch_size: 512 
+  num_workers: 0
+  persistent_workers: false
+model_cfg:
+  optimizer_cfg:
+    n_epochs: 1000
+    use_cosine_schedule: false
+    learning_rate: 0.0001
+    encoder_lr_fraction: 0.1 # encoder will be trained with encoder_lr_fraction*lr
+  full_covariance: false
+  n_layer: 6
+  embd_dropout: 0.3
+  context_len: 5 
+  input_dim: 1024 
+  out_dim: 10 # action_dim*(action_horizon + 1)
+  mixture_size: 4 
+  variance_tol: 1e-8 
+  encoder_cfg:
+    freeze_weights: false 
+  decoder_block_cfg:
+    residual_dropout: 0.3
+    mha_cfg:
+      embed_dim: 128
+      num_heads: 8
+      dropout: 0.3
+  lambda_mixtures: 0
+slicer_cfg:
+  window: ${model_cfg.context_len}
+  action_horizon: 4
+runtime_transforms:
+  - _target_: qfat.runtime_transforms.runtime_transforms.ImageAugmentationTransform
+    image_size: 96 
+    prob: 0.5
+callbacks:
+  epoch_end:
+    - _target_: qfat.callbacks.train_callbacks.RolloutCallback
+      env_cfg:
+        _target_: qfat.environments.pusht.env.ImagePushTWrapper
+        stats_path: ${training_dataset_cfg.stats_path}      
+      sampler_cfg:
+        _target_: qfat.samplers.sampler.AutoRegressiveSampler
+        context_len: # leave blank to use the model's context length
+        temperature: 0.000001
+        horizon: ${slicer_cfg.action_horizon}
+        use_tensors: true
+      reward_reduction: last
+      frequency: ${n_save_model}
+      n_rollouts: 50
+      max_steps: 300
+      skip: 150
+    - _target_: qfat.callbacks.train_callbacks.ValidationVarianceCallback
+      frequency: ${n_save_model}
+n_save_model: 10 
+n_eval: ${n_save_model}
+device: "mps"
+train_ratio: 0.95
+reset_epoch: false
+reset_cfg: true

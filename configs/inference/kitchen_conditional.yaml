@@ -1,0 +1,44 @@
+defaults:
+  - /entrypoints/InferenceEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /samplers/AutoRegressiveSamplerCfg@sampler_cfg
+  - /envs/GoalConditionalEnvCfg@env_cfg
+  - /datasets/KitchenTrajectoryDatasetCfg@env_cfg.dataset
+  - _self_
+
+wandb_cfg:
+  name:  ${sampler_cfg.temperature}temp_${sampler_cfg.sample_fn}_${model_afid} 
+  group: kitchen_conditional_inference
+  project: qfat
+  id: 
+  notes: 
+  mode: online
+device: mps
+training_run_id: 
+model_afid: 
+sampler_cfg:
+  temperature: 0.000001
+  horizon: 0
+  sample_fn: gmm
+env_cfg:
+  _target_: qfat.environments.goal_conditional.GoalAppendingWrapper
+  env:
+    _target_: qfat.environments.kitchen.env.NormalizedKitchenWrapper
+    stats_path: data/kitchen/data_stats.json
+    mask_goals: true  # whether to zero out the goals from the state
+    complete_in_any_order: false
+    terminate_on_task_complete: true
+  dataset:
+    include_goals: true
+  future_seq_len: 10
+  min_future_sep: 1
+  only_sample_tail: false
+  use_labels_env_task: true
+render_mode: # rgb_array # human
+num_episodes: 10 # if none, while loop till interrupted
+max_steps_per_episode: 300
+seed: 42
+callbacks:
+  episode_end:
+    - _target_: qfat.callbacks.inference_callbacks.RewardLogger
+      reward_reduction: sum 

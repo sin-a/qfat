@@ -1,0 +1,39 @@
+defaults:
+  - /entrypoints/InferenceEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /samplers/AutoRegressiveSamplerCfg@sampler_cfg
+  - /envs/MultiRouteEnvCfg@env_cfg
+  - _self_
+
+wandb_cfg:
+  name: ${sampler_cfg.temperature}_${model_afid}
+  group: multi_route_inference
+  project: qfat
+  id:
+  notes: 
+  mode: online 
+device: mps
+training_run_id:
+model_afid: 
+sampler_cfg:
+  context_len: # leave blank to use the model's context length
+  temperature: 1
+  sample_fn: gmm
+env_cfg:
+  random_reset: true
+  track_trajectories: true
+render_mode: # human
+num_episodes: 100 # if none, while loop till interrupted
+max_steps_per_episode: 50
+callbacks:
+  # step_end:
+  #   - _target_:  qfat.callbacks.inference_callbacks.QFATOutputStatsLogger
+  # episode_end:
+    # - _target_: qfat.callbacks.inference_callbacks.EpisodeVideoLogger 
+    #   fps: 5
+  run_end:
+    - _target_: qfat.callbacks.inference_callbacks.MRTrajectoryLogger
+      dataset_cfg:
+        _target_:   qfat.datasets.multi_route.MultiPathTrajectoryDataset
+        num_samples: 20000
+        noise_scale: 0.2

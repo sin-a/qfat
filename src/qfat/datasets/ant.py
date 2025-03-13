@@ -1,0 +1,117 @@
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+import numpy as np
+from numpy.typing import NDArray
+
+from qfat.constants import ANT_DATA_PATH
+from qfat.datasets.dataset import Trajectory, TrajectoryDataset
+from qfat.datasets.transform import TrajectoryTransform
+from qfat.normalizer.normalizer import MinMaxNormalizer
+
+
+class AntTrajectoryDataset(TrajectoryDataset):
+    def __init__(
+        self,
+        data_dir: str = str(ANT_DATA_PATH),
+        transforms: Optional[List[TrajectoryTransform]] = None,
+        stats_path: Optional[str] = str(ANT_DATA_PATH / "data_stats.json"),
+        include_goals: bool = False,
+    ):
+        """
+        Initialize the AntTrajectoryDataset.
+
+        Args:
+            data_dir (str): Directory where the ant trajectory data is located.
+            transforms (Optional[List[TrajectoryTransform]]): List of transforms to apply to trajectories.
+            stats_path (Optional[str]): Path to save or load normalizer stats.
+        """
+        super().__init__(transforms)
+
+        self.data_dir = Path(data_dir)
+        self.transforms = transforms
+        self.stats_path = Path(stats_path) if stats_path else None
+        self._include_goals = include_goals
+
+        actions, states, mask, goals = self._load_data()
+        self.normalizer = MinMaxNormalizer(normalize_actions_flag=True)
+
+        _, all_actions = self._collect_data_for_normalization(states, actions, mask)
+        self.normalizer.update_stats(None, all_actions)
+        if self.stats_path:
+            self.normalizer.save_stats(self.stats_path)
+
+        self._trajectories = self._create_trajectories(states, actions, mask, goals)
+
+    @property
+    def include_goals(self):
+        return self._include_goals
+
+    def _load_data(self) -> Tuple[NDArray, NDArray, NDArray, NDArray]:
+        """Load data from files."""
+        actions = np.load(self.data_dir / "a_save.npy")
+        states = np.concatenate(
+            (
+                np.load(self.data_dir / "ob_save.npy"),
+                np.load(self.data_dir / "goal_save.npy"),
+            ),
+            axis=-1,
+        )
+        goals = None
+        if self._include_goals:
+            goals = states.copy()
+        states[..., 29:37] = 0
+        mask = np.load(self.data_dir / "mask_save.npy")
+        return actions, states, mask, goals
+
+    def _collect_data_for_normalization(
+        self, states: NDArray, actions: NDArray, mask: NDArray
+    ) -> Tuple[NDArray, NDArray]:
+        """Collect valid states and actions for normalization."""
+        all_states, all_actions = [], []
+        for i in range(states.shape[0]):
+            valid_len = int(mask[i].sum().item())
+            all_states.append(states[i, :valid_len, :])
+            all_actions.append(actions[i, :valid_len, :])
+
+        return np.concatenate(all_states, axis=0), np.concatenate(all_actions, axis=0)
+
+    def _create_trajectories(
+        self,
+        states: NDArray,
+        actions: NDArray,
+        mask: NDArray,
+        goals: Optional[NDArray] = None,
+    ) -> List[Trajectory]:
+        """Generate normalized Trajectories from the dataset."""
+        trajectories = []
+        for i in range(states.shape[0]):
+            valid_len = int(mask[i].sum().item())
+            norm_states = states[i, :valid_len, :]
+            if goals is not None:
+                goal = goals[i, :valid_len, :]
+            norm_actions = self.normalizer.normalize_action(actions[i, :valid_len, :])
+            trajectories.append(
+                Trajectory(
+                    states=norm_states.astype(np.float32),
+                    actions=norm_actions.astype(np.float32),
+                    goals=goal.astype(np.float32) if goals is not None else None,
+                )
+            )
+        return trajectories
+
+    @property
+    def trajectories(self) -> List[Trajectory]:
+        return self._trajectories
+
+    def __getitem__(self, idx: int) -> Trajectory:
+        """Retrieve a normalized trajectory, optionally applying transforms."""
+        trajectory = self._trajectories[idx]
+        if self.transforms:
+            for transform in self.transforms:
+                trajectory = transform(trajectory=trajectory)
+        return trajectory
+
+
+if __name__ == "__main__":
+    ds = AntTrajectoryDataset(include_goals=True)

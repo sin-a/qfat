@@ -1,0 +1,18 @@
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.6.5
+  hooks:
+    - id: ruff
+      types_or: [ python, pyi ]
+      args: [ --fix ]
+      exclude: ^(src/qfat/environments/ur3/|src/qfat/environments/ant/|src/qfat/environments/kitchen/relay-policy-learning) 
+      types_or: [ python, pyi ]
+      exclude: ^(src/qfat/environments/ur3/|src/qfat/environments/ant/|src/qfat/environments/kitchen/relay-policy-learning) 
+- repo: local
+  hooks:
+    - id: poetry-export
+      name: poetry export
+      entry: bash -c "poetry export -f requirements.txt -o requirements.txt"
+      language: system
+      types: [python]
+      always_run: true

@@ -1,0 +1,35 @@
+defaults:
+  - /entrypoints/InferenceEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /samplers/AutoRegressiveSamplerCfg@sampler_cfg
+  - /envs/KitchenEnvCfg@env_cfg
+  - _self_
+
+wandb_cfg:
+  name: ${sampler_cfg.temperature}temp_${sampler_cfg.sample_fn}_${model_afid}
+  group: kitchen_inference
+  project: qfat
+  id: 
+  notes: 
+  mode: online 
+device: mps
+training_run_id:
+seed: 42
+model_afid: 
+sampler_cfg:
+  context_len: # leave blank to use the model's context length
+  temperature: 0.000001
+  sample_fn: gmm 
+env_cfg:
+  _target_: qfat.environments.kitchen.env.NormalizedKitchenWrapper
+  start_from_data: false
+render_mode: # rgb_array # human # rgb_array 
+num_episodes: 1000 # if none, while loop till interrupted
+max_steps_per_episode: 280
+callbacks:
+  episode_end:
+    - _target_: qfat.callbacks.inference_callbacks.RewardLogger
+      reward_reduction: sum
+    - _target_: qfat.callbacks.inference_callbacks.EnvBehaviourLogger
+      min_sequence_length: 1
+      max_sequence_length: 5

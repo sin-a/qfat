@@ -1,0 +1,93 @@
+defaults:
+  - /entrypoints/TrainingEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /datasets/SlicedTrajectoryDatasetCfg@slicer_cfg
+  - /models/QFATCfg@model_cfg
+  - /optimizers/OptimizerCfg@model_cfg.optimizer_cfg
+  - /models/IdentityEncoderCfg@model_cfg.encoder_cfg
+  - /models/DecoderBlockCfg@model_cfg.decoder_block_cfg
+  - /models/MultiheadAttentionCfg@model_cfg.decoder_block_cfg.mha_cfg
+  - /datasets/KitchenTrajectoryDatasetCfg@training_dataset_cfg
+  - /dataloaders/DataLoaderCfg@train_dataloader_cfg
+  - _self_
+wandb_cfg:
+  name: ${model_cfg.mixture_size}mix
+  group: kitchen
+  project: qfat
+  id:  # set id here to resume training from a checkpoint 
+  notes:
+  mode: online 
+train_dataloader_cfg:
+  shuffle: true
+  batch_size: 128 
+  num_workers: 0
+  persistent_workers: false
+val_dataloader_cfg:
+  shuffle: false
+  batch_size: 1024
+  num_workers: 4
+runtime_transforms:
+  - _target_: qfat.runtime_transforms.runtime_transforms.CosineGaussianPerturbation 
+    state_initial_noise: null
+    state_final_noise: null
+    state_input_index: 30
+    action_initial_noise: 0
+    action_final_noise: 0
+    action_input_index: null
+    log_noise: true
+    max_epoch: ${model_cfg.optimizer_cfg.n_epochs} 
+    fixed_noise: true
+model_cfg:
+  sample_fn: gmm
+  full_covariance: false
+  n_layer: 6
+  history_mask_prob: 0.3
+  embd_dropout: 0 
+  context_len: 10
+  input_dim: 30
+  out_dim: 9 # action_dim*(action_horizon + 1)
+  mixture_size: 16
+  optimizer_cfg:
+    n_epochs: 1200 
+    use_cosine_schedule: true
+    learning_rate: 0.01
+    warmup_epochs: 100 # ignored if use_cosine_schedule is false
+    min_lr: 0.00001 # ignored if use_cosine_schedule is false
+  decoder_block_cfg:
+    residual_dropout: 0.1
+    mha_cfg:
+      embed_dim: 128
+      num_heads: 8
+      dropout: 0.1
+  lambda_mixtures: 0
+slicer_cfg:
+  window: ${model_cfg.context_len}
+  action_horizon: 0
+callbacks:
+  epoch_end:
+    - _target_: qfat.callbacks.train_callbacks.RolloutCallback
+      env_cfg:
+        _target_: qfat.environments.kitchen.env.NormalizedKitchenWrapper
+        start_from_data: false
+        mask_goals: true  # whether to zero out the goals from the state
+      sampler_cfg:
+        _target_: qfat.samplers.sampler.AutoRegressiveSampler
+        context_len: # leave blank to use the model's context length
+        sample_fn: gmm
+        temperature: 1
+        horizon: ${slicer_cfg.action_horizon}
+        use_tensors: true
+      frequency: ${n_save_model}
+      n_rollouts: 50
+      max_steps: 280
+      log_entropy: true
+      filter_tasks_entropy: 
+      min_sequence_length: 4
+      max_sequence_length: 4
+      skip: 500
+n_save_model: ${n_eval} 
+n_eval: 20
+device: "mps"
+train_ratio: 0.95
+reset_epoch: false
+reset_cfg: false

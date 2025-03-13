@@ -1,0 +1,77 @@
+defaults:
+  - /entrypoints/TrainingEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /datasets/SlicedTrajectoryDatasetCfg@slicer_cfg
+  - /models/QFATCfg@model_cfg
+  - /optimizers/OptimizerCfg@model_cfg.optimizer_cfg
+  - /models/IdentityEncoderCfg@model_cfg.encoder_cfg
+  - /models/DecoderBlockCfg@model_cfg.decoder_block_cfg
+  - /models/MultiheadAttentionCfg@model_cfg.decoder_block_cfg.mha_cfg
+  - /models/IdentityEncoderCfg@model_cfg.encoder_cfg
+  - /datasets/PushTTrajectoryDatasetCfg@training_dataset_cfg
+  - /dataloaders/DataLoaderCfg@train_dataloader_cfg
+  - _self_
+wandb_cfg:
+  name: ${model_cfg.mixture_size}mix_${slicer_cfg.action_horizon}action_horizon
+  group: pusht
+  project: qfat
+  id: # set id here to resume training from a checkpoint 
+  notes:
+  mode: online 
+training_dataset_cfg:
+  stats_path: data/pusht/data_stats.json
+train_dataloader_cfg:
+  shuffle: true
+  batch_size: 128 
+  num_workers: 0
+  persistent_workers: false
+val_dataloader_cfg:
+  shuffle: false
+  batch_size: 1024
+  num_workers: 0
+  persistent_workers: false
+model_cfg:
+  pad_sampling: false 
+  full_covariance: false
+  n_layer: 6
+  embd_dropout: 0 
+  context_len: 5 
+  input_dim: 20
+  out_dim: 10 # action_dim*(action_horizon + 1)
+  mixture_size: 4
+  variance_tol: 1e-8 
+  optimizer_cfg:
+    n_epochs: 1300
+    use_cosine_schedule: false
+    learning_rate: 0.001
+  decoder_block_cfg:
+    residual_dropout: 0.1
+    mha_cfg:
+      embed_dim: 128
+      num_heads: 8
+      dropout: 0.1
+  lambda_mixtures: 0
+slicer_cfg:
+  window: ${model_cfg.context_len}
+  action_horizon: 4
+callbacks:
+  epoch_end:
+    - _target_: qfat.callbacks.train_callbacks.RolloutCallback
+      env_cfg:
+        _target_: qfat.environments.pusht.env.NormalizedPushTWrapper
+        stats_path: ${training_dataset_cfg.stats_path}
+      sampler_cfg:
+        _target_: qfat.samplers.sampler.AutoRegressiveSampler
+        temperature: 0.000001
+        horizon: ${slicer_cfg.action_horizon} 
+      reward_reduction: last
+      frequency: ${n_save_model}
+      n_rollouts: 100
+      max_steps: 300
+      skip: 300
+n_save_model: 20 
+n_eval: ${n_save_model}
+device: "mps"
+train_ratio: 0.95
+reset_epoch: false
+reset_cfg: false

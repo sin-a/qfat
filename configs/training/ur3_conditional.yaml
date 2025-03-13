@@ -1,0 +1,92 @@
+defaults:
+  - /entrypoints/TrainingEntrypointCfg@_here_
+  - /wandb/WandbCfg@wandb_cfg
+  - /datasets/SlicedTrajectoryDatasetCfg@slicer_cfg
+  - /models/QFATCfg@model_cfg
+  - /optimizers/OptimizerCfg@model_cfg.optimizer_cfg
+  - /models/IdentityEncoderCfg@model_cfg.encoder_cfg
+  - /models/DecoderBlockCfg@model_cfg.decoder_block_cfg
+  - /models/MultiheadAttentionCfg@model_cfg.decoder_block_cfg.mha_cfg
+  - /datasets/UR3TrajectoryDatasetCfg@training_dataset_cfg
+  - /dataloaders/DataLoaderCfg@train_dataloader_cfg
+  - _self_
+seed: 10
+wandb_cfg:
+  name: ${model_cfg.mixture_size}mix
+  group: ur3_conditional
+  project: qfat
+  id:  # set id here to resume training from a checkpoint 
+  notes:
+  mode: online 
+training_dataset_cfg:
+  stats_path: data/ur3/data_stats_conditional.json
+  include_goals: true
+train_dataloader_cfg:
+  shuffle: true
+  batch_size: 2048
+  num_workers: 0
+  persistent_workers: false
+val_dataloader_cfg:
+  shuffle: false 
+  batch_size: 1024
+  num_workers: 0
+  persistent_workers: false
+model_cfg:
+  goal_pos_emb: true
+  conditional_seq_dim: 6
+  share_state_encoder: true 
+  share_projection_layer: true
+  full_covariance: false
+  n_layer: 12
+  embd_dropout: 0.1 
+  context_len: 10 
+  input_dim: 6
+  out_dim: 2 # action_dim*(action_horizon + 1)
+  mixture_size: 4
+  variance_tol: 1e-8 
+  optimizer_cfg:
+    n_epochs: 1100
+    use_cosine_schedule: false
+    learning_rate: 0.0001
+  decoder_block_cfg:
+    residual_dropout: 0.1
+    mha_cfg:
+      embed_dim: 128
+      num_heads: 8
+      dropout: 0.1
+  lambda_mixtures: 0
+slicer_cfg:
+  window: ${model_cfg.context_len}
+  action_horizon: 0
+  future_seq_len: ${model_cfg.context_len}
+  min_future_sep: 1 
+callbacks:
+  epoch_end:
+    - _target_: qfat.callbacks.train_callbacks.RolloutCallback
+      is_goal_conditional: true
+      env_cfg:
+        _target_: qfat.environments.goal_conditional.GoalAppendingWrapper
+        env:
+          _target_: qfat.environments.ur3.ur3_wrapper.UR3Wrapper
+          stats_path: ${training_dataset_cfg.stats_path}
+        dataset: ${training_dataset_cfg}
+        future_seq_len: ${slicer_cfg.future_seq_len}
+        min_future_sep: ${slicer_cfg.min_future_sep}
+        only_sample_tail: false 
+      sampler_cfg:
+        _target_: qfat.samplers.sampler.AutoRegressiveSampler
+        temperature: 0.000001
+        sample_fn: gmm
+        use_tensors: true
+      reward_reduction: sum 
+      frequency: ${n_save_model}
+      n_rollouts: 50
+      max_steps: 1000
+      log_entropy: false
+n_save_model: 1
+n_eval: ${n_save_model}
+device: "mps"
+train_ratio: 0.95
+reset_epoch: false
+reset_cfg: false
+n_train_loss: 1 
