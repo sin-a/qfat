@@ -1,5 +1,12 @@
-# Quantization-Free Autoregressive Action Transformer 
-An official implementation of the paper **Quantization-Free Autoregressive Action Transformer**.
+# Quantization-Free Autoregressive Action Transformer
+
+An official implementation of the paper [**Quantization-Free Autoregressive Action Transformer**](https://arxiv.org/abs/2503.14259). 
+
+## Abstract
+Current transformer-based imitation learning approaches introduce discrete action representations and train an autoregressive transformer decoder on the resulting latent code. However, the initial quantization breaks the continuous structure of the action space thereby limiting the capabilities of the generative model. We propose a quantization-free method instead that leverages Generative Infinite-Vocabulary Transformers (GIVT) as a direct, continuous policy parametrization for autoregressive transformers. This simplifies the imitation learning pipeline while achieving state-of-the-art performance on a variety of popular simulated robotics tasks. We enhance our policy roll-outs by carefully studying sampling algorithms, further improving the results.
+
+## Architecture Overview
+![qfat_policy](https://github.com/user-attachments/assets/16ea4b00-934b-4032-bd72-ffe4f9db6831)
 
 ## Installation
 
