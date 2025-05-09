@@ -110,7 +110,7 @@ class TrainingEntrypoint(Entrypoint):
         if self.val_data is not None:
             cfg_dle = self.cfg.val_dataloader_cfg
             val_loader = DataLoader(
-                self.train_data,
+                self.val_data,
                 shuffle=cfg_dle.shuffle,
                 pin_memory=cfg_dle.pin_memory,
                 batch_size=cfg_dle.batch_size,
@@ -119,6 +119,34 @@ class TrainingEntrypoint(Entrypoint):
             )
         logger.info(f"Number of training batches per epoch: {len(train_loader)}")
         return train_loader, val_loader
+    
+    def _save_checkpoint(self) -> None:
+        checkpoint = {
+            "epoch": self.epoch,
+            "model": self.model.state_dict(),
+            "optimizer": self.optimizer.state_dict() if self.optimizer else None,
+            "scheduler": self.scheduler.state_dict() if self.scheduler else None,
+        }
+
+        # save epoch-style checkpoint for inference
+        path_epoch = f"{self.run.dir}/checkpoint_epoch_{self.epoch}.pth"
+        torch.save(checkpoint, path_epoch)
+
+        versioned_artifact = wandb.Artifact(
+            name=f"checkpoint_epoch_{self.epoch}_{self.run.id}",
+            type="model"
+        )
+        versioned_artifact.add_file(path_epoch)
+        self.run.log_artifact(versioned_artifact)
+
+        # save/ overwrite artifact to resume training
+        resume_artifact = wandb.Artifact(
+            name=f"checkpoint_{self.run.id}",
+            type="model"
+        )
+        resume_artifact.add_file(path_epoch, name="checkpoint.pth") 
+        self.run.log_artifact(resume_artifact, aliases=["latest"])
+        
 
     def _on_epoch_start(self) -> None:
         if "epoch_start" in self.callbacks.keys():
@@ -148,25 +176,7 @@ class TrainingEntrypoint(Entrypoint):
 
         if (self.epoch % cfg.n_save_model) == 0 and self.epoch != 0:
             logger.info(f"Logging checkpoint to wandb at epoch {self.epoch}")
-            checkpoint_path = f"{self.run.dir}/checkpoint_epoch_{self.epoch}.pth"
-
-            checkpoint = {
-                "epoch": self.epoch,
-                "model": self.model.state_dict(),
-                "optimizer": self.optimizer.state_dict()
-                if self.optimizer is not None
-                else None,
-                "scheduler": self.scheduler.state_dict()
-                if self.scheduler is not None
-                else None,
-            }
-            torch.save(checkpoint, checkpoint_path)
-            artifact = wandb.Artifact(
-                name=f"checkpoint_epoch_{self.epoch}_{self.run.id}",
-                type="model"
-            )
-            artifact.add_file(checkpoint_path)
-            self.run.log_artifact(artifact)
+            self._save_checkpoint()
 
         if self.model.optimizer_cfg.use_cosine_schedule:
             self.scheduler.step()
@@ -287,24 +297,7 @@ class TrainingEntrypoint(Entrypoint):
             for callback in key_callbacks:
                 callback.finalize()
         logger.info("Logging final checkpoint")
-        checkpoint_path = f"{self.run.dir}/checkpoint_epoch_{self.epoch}.pth"
-        checkpoint = {
-            "epoch": self.epoch,
-            "model": self.model.state_dict(),
-            "optimizer": self.optimizer.state_dict()
-            if self.optimizer is not None
-            else None,
-            "scheduler": self.scheduler.state_dict()
-            if self.scheduler is not None
-            else None,
-        }
-        torch.save(checkpoint, checkpoint_path)
-        artifact = wandb.Artifact(
-            name=f"checkpoint_epoch_{self.epoch}_{self.run.id}", 
-            type="model"
-            )
-        artifact.add_file(checkpoint_path)
-        self.run.log_artifact(artifact)
+        self._save_checkpoint()
         return super()._on_run_end()
 
     def _run(self) -> None:
