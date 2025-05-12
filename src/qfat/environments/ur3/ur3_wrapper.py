@@ -10,7 +10,7 @@ from gym_custom.envs.custom.ur_utils import NullObjectiveBase
 from gym_custom.envs.custom.ur_utils import URScriptWrapper_SingleUR3 as URScriptWrapper
 
 from qfat.constants import UR3_DATA_PATH
-from qfat.normalizer.normalizer import IdentityNormalizer
+from qfat.normalizer.normalizer import MinMaxNormalizer
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class UR3Wrapper(gym.Wrapper):
         super(UR3Wrapper, self).__init__(
             gym_custom.make("single-ur3-xy-left-comb-larr-for-train-v0")
         )
-        self.normalizer = IdentityNormalizer(normalize_actions_flag=False)
+        self.normalizer = MinMaxNormalizer()
         self.normalizer.load_stats(Path(stats_path))
 
         self.servoj_args, self.speedj_args = (

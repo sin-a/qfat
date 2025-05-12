@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 from qfat.constants import UR3_DATA_PATH
 from qfat.datasets.dataset import Trajectory, TrajectoryDataset
 from qfat.datasets.transform import TrajectoryTransform
-from qfat.normalizer.normalizer import IdentityNormalizer
+from qfat.normalizer.normalizer import MinMaxNormalizer
 
 
 class UR3TrajectoryDataset(TrajectoryDataset):
@@ -37,7 +37,7 @@ class UR3TrajectoryDataset(TrajectoryDataset):
         self._include_goals = include_goals
 
         actions, states, mask = self._load_data()
-        self.normalizer = IdentityNormalizer(normalize_actions_flag=False)
+        self.normalizer = MinMaxNormalizer()
 
         all_states, all_actions, all_goals = self._collect_data_for_normalization(
             states, actions, mask

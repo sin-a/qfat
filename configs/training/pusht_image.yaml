@@ -32,7 +32,7 @@ val_dataloader_cfg:
   persistent_workers: false
 model_cfg:
   optimizer_cfg:
-    n_epochs: 1000
+    n_epochs: 1001
     use_cosine_schedule: false
     learning_rate: 0.0001
     encoder_lr_fraction: 0.1 # encoder will be trained with encoder_lr_fraction*lr

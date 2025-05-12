@@ -48,7 +48,7 @@ model_cfg:
   out_dim: 9 # action_dim*(action_horizon + 1)
   mixture_size: 16
   optimizer_cfg:
-    n_epochs: 1200 
+    n_epochs: 1201 
     use_cosine_schedule: true
     learning_rate: 0.01
     warmup_epochs: 100 # ignored if use_cosine_schedule is false

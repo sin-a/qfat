@@ -7,10 +7,10 @@ import hydra
 import torch
 import torch.utils
 import torch.utils.data
+import wandb
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import wandb
 from qfat.callbacks.callbacks import Callback
 from qfat.conf.configs import TrainingEntrypointCfg
 from qfat.datasets.dataset import IMPLEMENTED_COLLATE_FNS, Batch
@@ -110,7 +110,7 @@ class TrainingEntrypoint(Entrypoint):
         if self.val_data is not None:
             cfg_dle = self.cfg.val_dataloader_cfg
             val_loader = DataLoader(
-                self.train_data,
+                self.val_data,
                 shuffle=cfg_dle.shuffle,
                 pin_memory=cfg_dle.pin_memory,
                 batch_size=cfg_dle.batch_size,
@@ -124,6 +124,24 @@ class TrainingEntrypoint(Entrypoint):
         if "epoch_start" in self.callbacks.keys():
             for clb in self.callbacks["epoch_start"]:
                 clb(self)
+
+    def _save_checkpoint(self) -> None:
+        checkpoint_path = f"{self.run.dir}/checkpoint_epoch_{self.epoch}.pth"
+        checkpoint = {
+            "epoch": self.epoch,
+            "model": self.model.state_dict(),
+            "optimizer": self.optimizer.state_dict()
+            if self.optimizer is not None
+            else None,
+            "scheduler": self.scheduler.state_dict()
+            if self.scheduler is not None
+            else None,
+        }
+        torch.save(checkpoint, checkpoint_path)
+        self.run.log_artifact(
+            checkpoint_path,
+            name=f"checkpoint_epoch_{self.epoch}_{self.run.id}",
+        )
 
     def _on_epoch_end(self) -> None:
         cfg: TrainingEntrypointCfg = self.cfg
@@ -148,24 +166,7 @@ class TrainingEntrypoint(Entrypoint):
 
         if (self.epoch % cfg.n_save_model) == 0 and self.epoch != 0:
             logger.info(f"Logging checkpoint to wandb at epoch {self.epoch}")
-            checkpoint_path = f"{self.run.dir}/checkpoint_epoch_{self.epoch}.pth"
-
-            checkpoint = {
-                "epoch": self.epoch,
-                "model": self.model.state_dict(),
-                "optimizer": self.optimizer.state_dict()
-                if self.optimizer is not None
-                else None,
-                "scheduler": self.scheduler.state_dict()
-                if self.scheduler is not None
-                else None,
-            }
-            torch.save(checkpoint, checkpoint_path)
-            self.run.log_artifact(
-                checkpoint_path,
-                name=f"checkpoint_epoch_{self.epoch}_{self.run.id}",
-            )
-
+            self._save_checkpoint()
         if self.model.optimizer_cfg.use_cosine_schedule:
             self.scheduler.step()
 
