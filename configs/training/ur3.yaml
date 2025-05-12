@@ -32,7 +32,7 @@ val_dataloader_cfg:
   persistent_workers: false
 model_cfg:
   full_covariance: false
-  n_layer: 12
+  n_layer: 6
   embd_dropout: 0.1
   history_mask_prob: 0
   context_len: 10 
@@ -41,7 +41,7 @@ model_cfg:
   mixture_size: 4
   variance_tol: 1e-5
   optimizer_cfg:
-    n_epochs: 400
+    n_epochs: 401
     use_cosine_schedule: true
     learning_rate: 0.001
     warmup_epochs: 30 # ignored if use_cosine_schedule is false

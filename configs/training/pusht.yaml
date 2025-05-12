@@ -41,7 +41,7 @@ model_cfg:
   mixture_size: 4
   variance_tol: 1e-8 
   optimizer_cfg:
-    n_epochs: 1300
+    n_epochs: 1301
     use_cosine_schedule: false
     learning_rate: 0.001
   decoder_block_cfg:

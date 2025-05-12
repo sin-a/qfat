@@ -37,7 +37,7 @@ model_cfg:
   mixture_size: 4
   history_mask_prob: 0.7
   optimizer_cfg:
-    n_epochs: 1000 
+    n_epochs: 1001 
     use_cosine_schedule: true
     learning_rate: 0.001
     warmup_epochs: 100 # ignored if use_cosine_schedule is false
