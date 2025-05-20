@@ -1,6 +1,6 @@
 # Quantization-Free Autoregressive Action Transformer
 
-An official implementation of the paper [**Quantization-Free Autoregressive Action Transformer**](https://arxiv.org/abs/2503.14259). 
+An official implementation of the paper [**Quantization-Free Autoregressive Action Transformer**](https://arxiv.org/abs/2503.14259v2). 
 
 ## Abstract
 Current transformer-based imitation learning approaches introduce discrete action representations and train an autoregressive transformer decoder on the resulting latent code. However, the initial quantization breaks the continuous structure of the action space thereby limiting the capabilities of the generative model. We propose a quantization-free method instead that leverages Generative Infinite-Vocabulary Transformers (GIVT) as a direct, continuous policy parametrization for autoregressive transformers. This simplifies the imitation learning pipeline while achieving state-of-the-art performance on a variety of popular simulated robotics tasks. We enhance our policy roll-outs by carefully studying sampling algorithms, further improving the results.
@@ -113,7 +113,7 @@ Replace `[CONFIG_NAME]` with one of the valid configuration names found in `conf
 - `ur3_conditional`
 -  `ant`
 
-To properly run inference, you must add the `training_run_id` of the training run in the corresponding configuration file under `configs/inference`. Additionally, specify the `model_afid` you wish to run inference on.
+To properly run inference, you must add the `training_run_id` of the training run in the corresponding configuration file under `configs/inference`. Additionally, specify the `model_afid` you wish to run inference on. Note that the artifact name must match the form `checkpoint_epoch_epochnumber_runid:v0`. 
 
 Example configuration:
 ```yaml

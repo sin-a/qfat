@@ -520,38 +520,26 @@ class QFAT(GenerativeModel):
         return dist
 
     @staticmethod
-    def mask_history_states(x: torch.Tensor, mask_prob: float) -> torch.Tensor:
+    def mask_history_states(
+        validity_mask: torch.Tensor, mask_prob: float
+    ) -> torch.Tensor:
         """
-        Efficiently masks historical states in the tensor x by zeroing out each state (except the last one)
-        with probability `mask_prob`. The input tensor is expected to have shape (B, T, D).
-        This is done to counter act the effect of causal confusion in imitation learning.
+        Masks historical states. This is done to counter act the effect of causal confusion in imitation learning.
         https://arxiv.org/pdf/1905.11979
-
-        Args:
-            x (torch.Tensor): Input tensor with shape (B, T, D)
-            mask_prob (float): Probability with which to mask (zero-out) each historical state.
-
-        Returns:
-            torch.Tensor: The masked tensor.
         """
-        B, T, D = x.shape
+        B, T = validity_mask.shape
         if T <= 1:
-            return x
+            return validity_mask
 
         # Generate a mask for the history tokens: for the first T-1 tokens, sample a Bernoulli variable
         # that is 1 with probability (1 - mask_prob) (i.e., keep the state), and 0 otherwise.
         # The most recent token is always kept.
         history_mask = torch.bernoulli(
-            torch.full((B, T - 1), 1 - mask_prob, device=x.device)
+            torch.full((B, T - 1), 1 - mask_prob, device=validity_mask.device)
         )
-        last_mask = torch.ones(B, 1, device=x.device)
-        # Concatenate along the sequence dimension and add an extra dimension for broadcasting.
-        mask = torch.cat([history_mask, last_mask], dim=1).unsqueeze(
-            -1
-        )  # shape: (B, T, 1)
-
-        # Multiply the input by the mask (in-place if desired)
-        return x * mask
+        last_mask = torch.ones(B, 1, device=validity_mask.device)
+        mask = torch.cat([history_mask, last_mask], dim=1)  # shape: (B, T)
+        return (validity_mask * mask).to(torch.bool)
 
     @profile
     def forward(self, batch: Batch) -> ModelOutput:
@@ -588,8 +576,10 @@ class QFAT(GenerativeModel):
         pos_idx = torch.arange(T).expand(B, -1).to(x.device)
         pos_embed = self.transformer.pos_embed(pos_idx)
         x += pos_embed
-        if self.training:
-            x = self.mask_history_states(x, self.history_mask_prob)
+        if self.training and self.history_mask_prob > 0:
+            validity_mask = self.mask_history_states(
+                validity_mask, self.history_mask_prob
+            )
 
         x = self.transformer.dropout(x)
 
@@ -613,9 +603,13 @@ class QFAT(GenerativeModel):
         for dec_block in self.transformer.dec_blocks:
             x = dec_block(
                 x,
-                attn_mask=~mask if mask is not None else None,
+                attn_mask=~mask if (mask is not None) else None,
+                key_padding_mask=~validity_mask
+                if (validity_mask is not None and validity_mask.all())
+                else None,
                 **self.mha_kwargs,
             )
+            x = x.nan_to_num()
         x = self.transformer.ln_f(x)
         gmm_params = self.get_gmm_params(
             x[:, -T:, ...]
@@ -625,6 +619,7 @@ class QFAT(GenerativeModel):
             loss = self.compute_loss(
                 gmm_params=gmm_params, y=y, validity_mask=validity_mask
             )
+
         return ModelOutput(output=gmm_params, loss=loss)
 
     @profile
